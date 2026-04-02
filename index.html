@@ -8,7 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
@@ -43,7 +42,8 @@
         .btn-group { display: flex; gap: 10px; }
         .btn { padding: 8px 18px; border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid transparent; transition: var(--transition); text-decoration: none; display: flex; align-items: center; gap: 6px; }
         
-        .btn-export { background-color: var(--fasiclin-green); color: white; }
+        .btn-export { background-color: var(--fasiclin-green); color: white; border: none; }
+        .btn-export:hover { background-color: #217a39; }
 
         .container { padding: 30px 5%; max-width: 1600px; margin: auto; }
         
@@ -54,7 +54,7 @@
         .btn-month { padding: 6px 15px; border-radius: 15px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; transition: var(--transition); }
         .btn-month.active { background: var(--fasiclin-green); color: white; border-color: var(--fasiclin-green); }
 
-        select { flex-grow: 1; padding: 10px 15px; border: 1px solid #ddd; border-radius: 25px; font-size: 15px; outline: none; }
+        select { flex-grow: 1; padding: 10px 15px; border: 1px solid #ddd; border-radius: 25px; font-size: 15px; outline: none; background: white; }
 
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; margin-bottom: 30px; }
         .card-stat { background: var(--card-bg); padding: 30px; border-radius: 15px; text-align: center; box-shadow: var(--shadow); border: 1px solid #eaeaea;}
@@ -101,14 +101,20 @@
         <div class="card-stat"><h3>Eficiência Média</h3><p id="avgMeta">0%</p></div>
     </div>
 
-    <div class="main-chart-card"><h2>Tendência de Atingimento de Meta Diária</h2><div style="height: 380px;"><canvas id="chartMeta"></canvas></div></div>
+    <div class="main-chart-card">
+        <h2>Tendência de Atingimento de Meta Diária</h2>
+        <div style="height: 380px;"><canvas id="chartMeta"></canvas></div>
+    </div>
 
     <div class="mid-grid">
         <div class="card-chart"><h2>Produção por Turma</h2><div style="height: 320px;"><canvas id="chartTurma"></canvas></div></div>
         <div class="card-chart"><h2>Distribuição por Clínica</h2><div style="height: 320px;"><canvas id="chartClinica"></canvas></div></div>
     </div>
 
-    <div class="card-chart"><h2>Ranking de Receita por Procedimento</h2><div style="height: 550px;"><canvas id="chartProcedimento"></canvas></div></div>
+    <div class="card-chart">
+        <h2>Ranking de Receita por Procedimento</h2>
+        <div style="height: 550px;"><canvas id="chartProcedimento"></canvas></div>
+    </div>
 </div>
 
 <script>
@@ -116,14 +122,33 @@
     const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=1575732509`;
 
     let rawData = [];
+    let filteredData = []; 
     let myCharts = {};
     let selectedMonth = 'TODOS';
     const F_GREEN = '#299947';
     const F_GRAY = '#a395a8';
 
     window.onload = function() {
+        // CORREÇÃO: Registro do plugin necessário para exibir números nos gráficos
+        Chart.register(ChartDataLabels);
         fetchDataFromSheets();
     };
+
+    // CORREÇÃO: Função para tratar datas brasileiras de forma segura
+    function parseDate(d) {
+        if (!d) return null;
+        if (d instanceof Date) return d;
+        if (typeof d === 'string') {
+            if (d.includes('/')) {
+                let parts = d.split(' ')[0].split('/');
+                if (parts.length === 3) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+            }
+        }
+        const fallback = new Date(d);
+        return isNaN(fallback) ? null : fallback;
+    }
 
     async function fetchDataFromSheets() {
         document.getElementById('loadingOverlay').style.display = 'flex';
@@ -152,10 +177,10 @@
         container.innerHTML = '<button class="btn-month active" onclick="setMonth(\'TODOS\', this)">Todos os Meses</button>';
         const months = [...new Set(rawData.map(row => {
             const d = getVal(row, 'DATA');
-            if(!d) return null;
-            const date = new Date(d);
-            return isNaN(date) ? null : date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+            const date = parseDate(d);
+            return date ? date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' }) : null;
         }))].filter(Boolean);
+        
         months.forEach(m => {
             container.innerHTML += `<button class="btn-month" onclick="setMonth('${m}', this)">${m}</button>`;
         });
@@ -181,14 +206,17 @@
 
     function filterData() {
         const selProc = document.getElementById('procSelect').value;
-        const filtered = rawData.filter(row => {
+        
+        // CORREÇÃO: Atualiza a variável global que o PDF usará depois
+        filteredData = rawData.filter(row => {
             const d = getVal(row, 'DATA');
-            const dateStr = d ? new Date(d).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }) : '';
+            const date = parseDate(d);
+            const dateStr = date ? date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' }) : '';
             const matchMonth = selectedMonth === 'TODOS' || dateStr === selectedMonth;
             const matchProc = selProc === 'TODOS' || (getVal(row, 'PROCEDIMENTO') || '').toString().trim() === selProc;
             return matchMonth && matchProc;
         });
-        updateDashboard(filtered);
+        updateDashboard(filteredData);
     }
 
     function populateDropdown() {
@@ -216,23 +244,31 @@
             tMap[tur] = (tMap[tur] || 0) + q;
             cMap[cli] = (cMap[cli] || 0) + q;
 
-            if(dt) {
-                let dStr = new Date(dt).toLocaleDateString('pt-BR');
+            const dateObj = parseDate(dt);
+            if(dateObj) {
+                let dStr = dateObj.toLocaleDateString('pt-BR');
                 if(!mMap[dStr]) mMap[dStr] = { r: 0, m: 40 };
                 mMap[dStr].r += q;
             }
         });
 
         document.getElementById('totalQtd').innerText = tQtd.toLocaleString('pt-BR');
-        document.getElementById('totalFinan').innerText = tFinan.toLocaleString('pt-BR',{style:'currency', currency:'BRL'});
+        document.getElementById('totalFinan').innerText = tFinan.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
         const dias = Object.keys(mMap).length;
         document.getElementById('avgMeta').innerText = dias > 0 ? Math.round((tQtd/(dias*40))*100)+"%" : "0%";
+        
         renderCharts(pMap, pCountMap, mMap, tMap, cMap);
     }
 
     function renderCharts(pMap, pCountMap, mMap, tMap, cMap) {
         Object.values(myCharts).forEach(c => c.destroy());
-        const dates = Object.keys(mMap).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+        
+        const dates = Object.keys(mMap).sort((a,b) => {
+            const da = a.split('/').reverse().join('-');
+            const db = b.split('/').reverse().join('-');
+            return new Date(da) - new Date(db);
+        });
+
         const cfg = { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { display: false }, legend: { position: 'bottom' } } };
 
         myCharts.meta = new Chart(document.getElementById('chartMeta'), {
@@ -254,7 +290,22 @@
                 labels: sortedProcs, 
                 datasets: [{ label: 'Receita (R$)', data: sortedProcs.map(k=>pMap[k]), backgroundColor: F_GREEN, borderRadius: 10 }] 
             },
-            options: { ...cfg, indexAxis: 'y', plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'right', formatter: (val, ctx) => `Qtd: ${pCountMap[ctx.chart.data.labels[ctx.dataIndex]]}`, color: F_GRAY, font: { weight: '600', size: 11 } } }, scales: { x: { grid: { display: false } } } }
+            options: { 
+                ...cfg, 
+                indexAxis: 'y', 
+                plugins: { 
+                    legend: { display: false }, 
+                    datalabels: { 
+                        display: true, 
+                        anchor: 'end', 
+                        align: 'right', 
+                        formatter: (val, ctx) => `Qtd: ${pCountMap[ctx.chart.data.labels[ctx.dataIndex]]}`, 
+                        color: F_GRAY, 
+                        font: { weight: '600', size: 11 } 
+                    } 
+                }, 
+                scales: { x: { grid: { display: false }, grace: '10%' } } 
+            }
         });
 
         myCharts.turma = new Chart(document.getElementById('chartTurma'), {
@@ -273,24 +324,41 @@
     async function exportToPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
+        
         doc.setFontSize(18);
         doc.setTextColor(41, 153, 71);
         doc.text('FASICLIN - Relatório de Desempenho', 14, 20);
-        const tableData = rawData.slice(0, 20).map(row => [
-            new Date(getVal(row, 'DATA')).toLocaleDateString('pt-BR'),
-            getVal(row, 'PROCEDIMENTO'),
-            getVal(row, 'TURMA'),
-            cleanNum(getVal(row, 'VALORTOTAL')).toLocaleString('pt-BR', {style:'currency', currency:'BRL'})
-        ]);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Filtro Aplicado: ${selectedMonth} | Procedimento: ${document.getElementById('procSelect').value}`, 14, 28);
+
+        // CORREÇÃO: Pega os dados filtrados atuais (limite de 100 p/ o PDF não travar)
+        const exportData = filteredData.length > 0 ? filteredData.slice(0, 100) : rawData.slice(0, 100);
+        
+        const tableData = exportData.map(row => {
+            const dateObj = parseDate(getVal(row, 'DATA'));
+            const dateStr = dateObj ? dateObj.toLocaleDateString('pt-BR') : '---';
+            return [
+                dateStr,
+                getVal(row, 'PROCEDIMENTO') || 'N/A',
+                getVal(row, 'TURMA') || 'N/A',
+                cleanNum(getVal(row, 'VALORTOTAL')).toLocaleString('pt-BR', {style:'currency', currency:'BRL'})
+            ];
+        });
+
         doc.autoTable({
-            startY: 30,
+            startY: 35,
             head: [['Data', 'Procedimento', 'Turma', 'Valor']],
             body: tableData,
             theme: 'grid',
-            headStyles: { fillColor: [41, 153, 71] }
+            headStyles: { fillColor: [41, 153, 71] },
+            styles: { fontSize: 8 }
         });
+
         doc.save('Relatorio_Fasiclin_Premium.pdf');
     }
 </script>
+
 </body>
 </html>
