@@ -17,6 +17,21 @@ h1 {
   margin-bottom: 20px;
 }
 
+
+.mes-btn {
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: none;
+  background: #eee;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.mes-btn.ativo {
+  background: green;
+  color: white;
+}
+
 .cards {
   display: flex;
   gap: 20px;
@@ -54,6 +69,23 @@ canvas {
 
 <h1>FASICLIN • Gestão Inteligente</h1>
 
+<div style="margin-bottom:20px;">
+
+  <!-- Procedimento -->
+  <label>🎯 Procedimento:</label>
+  <select id="filtroProcedimento" onchange="aplicarFiltros()">
+    <option value="todos">-- Todos os Procedimentos --</option>
+  </select>
+
+  <br><br>
+
+  <!-- Meses -->
+  <div id="filtroMes">
+    <button onclick="setMes('todos')" class="mes-btn ativo">Todos os Meses</button>
+  </div>
+
+</div>
+
 <div class="cards">
   <div class="card">
     <h3>Total</h3>
@@ -75,7 +107,7 @@ canvas {
 </div>
 
 <script>
-
+/*
 const URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14Ylz2lkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHC8I1vIuwU_2X0idkNswPkO8tum1kmScpspHo5A/pub?output=csv";
 
 async function carregarDados() {
@@ -185,9 +217,125 @@ function atualizarDashboard(dados) {
   });
 }
 
-carregarDados();
+carregarDados();*/
+
+let dadosOriginais = [];
+let mesSelecionado = "todos";
+
+function getMes(data) {
+  const partes = data.split("/");
+  return partes[1]; // mês
+}
+
+function setMes(mes) {
+  mesSelecionado = mes;
+
+  document.querySelectorAll(".mes-btn").forEach(b => b.classList.remove("ativo"));
+  event.target.classList.add("ativo");
+
+  aplicarFiltros();
+}
+
+function aplicarFiltros() {
+
+  let proc = document.getElementById("filtroProcedimento").value;
+
+  let filtrado = dadosOriginais.filter(d => {
+
+    let okProc = (proc === "todos" || d.procedimento === proc);
+    let okMes = (mesSelecionado === "todos" || getMes(d.data) === mesSelecionado);
+
+    return okProc && okMes;
+  });
+
+  atualizarDashboard(filtrado);
+}
+
+async function carregarDados() {
+
+  const res = await fetch(URL);
+  const texto = await res.text();
+
+  const linhas = texto.split("\n");
+
+  let dados = [];
+
+  for (let i = 1; i < linhas.length; i++) {
+
+    const col = linhas[i].split(",");
+
+    if (col.length < 4) continue;
+
+    let data = col[0]?.trim();
+    let procedimento = col[1]?.trim();
+    let valor = col[2]?.trim();
+    let quantidade = col[3]?.trim();
+
+    valor = valor
+      ?.replace("R$", "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+
+    valor = parseFloat(valor);
+    quantidade = parseFloat(quantidade);
+
+    if (!data || !procedimento) continue;
+
+    dados.push({
+      data,
+      procedimento,
+      valor: isNaN(valor) ? 0 : valor,
+      quantidade: isNaN(quantidade) ? 0 : quantidade
+    });
+  }
+
+  dadosOriginais = dados;
+
+  popularFiltros(dados);
+  aplicarFiltros();
+}
+
+function popularFiltros(dados) {
+
+  // PROCEDIMENTOS
+  const select = document.getElementById("filtroProcedimento");
+
+  let procedimentos = [...new Set(dados.map(d => d.procedimento))];
+
+  procedimentos.forEach(p => {
+    let op = document.createElement("option");
+    op.value = p;
+    op.textContent = p;
+    select.appendChild(op);
+  });
+
+  // MESES
+  const mesesContainer = document.getElementById("filtroMes");
+
+  let meses = [...new Set(dados.map(d => getMes(d.data)))];
+
+  meses.forEach(m => {
+    let btn = document.createElement("button");
+    btn.className = "mes-btn";
+    btn.innerText = nomeMes(m);
+    btn.onclick = () => setMes(m);
+    mesesContainer.appendChild(btn);
+  });
+}
+
+function nomeMes(m) {
+  const nomes = {
+    "01":"Jan", "02":"Fev", "03":"Mar",
+    "04":"Abr", "05":"Mai", "06":"Jun",
+    "07":"Jul", "08":"Ago", "09":"Set",
+    "10":"Out", "11":"Nov", "12":"Dez"
+  };
+  return nomes[m] || m;
+}
 
 </script>
+
+
 
 </body>
 </html>
