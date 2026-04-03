@@ -60,7 +60,7 @@ canvas { max-height:350px; }
 <script>
 
 // 🔥 COLE AQUI SEU LINK PUBLICADO CSV
-const SHEET_URL = "COLE_AQUI_O_LINK_CSV_PUBLICADO";
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14Ylz2lkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHC8I1vIuwU_2X0idkNswPkO8tum1kmScpspHo5A/pub?output=csv";
 
 // VARIÁVEIS
 let rawData=[];
@@ -73,13 +73,21 @@ window.onload = fetchData;
 async function fetchData(){
 try{
 const res = await fetch(SHEET_URL);
-const txt = await res.text();
+const text = await res.text();
 
-const wb = XLSX.read(txt,{type:'string'});
-const ws = wb.Sheets[wb.SheetNames[0]];
-rawData = XLSX.utils.sheet_to_json(ws);
+const rows = text.split("\n").map(r => r.split(","));
 
-console.log(rawData);
+const headers = rows[0];
+
+rawData = rows.slice(1).map(row => {
+    let obj = {};
+    headers.forEach((h,i)=>{
+        obj[h.trim()] = row[i];
+    });
+    return obj;
+});
+
+console.log("DADOS:", rawData);
 
 populateFilters();
 update(rawData);
