@@ -102,6 +102,7 @@ canvas {
 </div>
 
 <script>
+
 const URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14Ylz2lkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHC8I1vIuwU_2X0idkNswPkO8tum1kmScpspHo5A/pub?output=csv";
 
 let dados = [];
@@ -112,20 +113,35 @@ async function carregarDados() {
         const res = await fetch(URL);
         const texto = await res.text();
 
-        const linhas = texto.split("\n").slice(1);
+        const linhas = texto.split("\n");
 
-        dados = linhas.map(l => {
-            const col = l.split(",");
+        // REMOVE CABEÇALHO
+        linhas.shift();
 
-            return {
-                data: col[0],
-                procedimento: col[1],
-                quantidade: Number(col[2]) || 0,
-                valor: Number(col[3]?.replace("R$", "").replace(",", ".")) || 0
-            };
-        }).filter(d => d.procedimento);
+        dados = linhas.map(linha => {
+            // REGEX PROFISSIONAL PRA CSV (resolve vírgula em valores)
+            const col = linha.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
 
-        console.log("Dados carregados:", dados);
+            if (!col || col.length < 4) return null;
+
+            let data = (col[0] || "").replace(/"/g, "").trim();
+            let procedimento = (col[1] || "").replace(/"/g, "").trim();
+            let quantidade = parseFloat((col[2] || "0").replace(",", ".")) || 0;
+
+            let valorRaw = (col[3] || "")
+                .replace(/"/g, "")
+                .replace("R$", "")
+                .replace(/\./g, "")
+                .replace(",", ".")
+                .trim();
+
+            let valor = parseFloat(valorRaw) || 0;
+
+            return { data, procedimento, quantidade, valor };
+
+        }).filter(d => d && d.procedimento);
+
+        console.log("🔥 Dados tratados:", dados);
 
         montarFiltro();
         atualizar();
@@ -164,27 +180,23 @@ function atualizar() {
 
         let okMes = true;
         if (mesSelecionado !== "todos") {
-            okMes = d.data && d.data.split("/")[1] === mesSelecionado;
+            if (!d.data.includes("/")) return false;
+            okMes = d.data.split("/")[1] === mesSelecionado;
         }
 
         return okProc && okMes;
     });
 
-    console.log("Filtrados:", filtrados);
+    console.log("📊 Filtrados:", filtrados);
 
-    let total = 0;
-    let faturamento = 0;
-
-    filtrados.forEach(d => {
-        total += d.quantidade;
-        faturamento += d.valor;
-    });
+    let total = filtrados.reduce((s, d) => s + d.quantidade, 0);
+    let faturamento = filtrados.reduce((s, d) => s + d.valor, 0);
 
     document.getElementById("total").innerText = total;
     document.getElementById("faturamento").innerText = "R$ " + faturamento.toFixed(2);
 
-    let eficiencia = total > 0 ? ((faturamento / total) * 10) : 0;
-    document.getElementById("eficiencia").innerText = eficiencia.toFixed(1) + "%";
+    let eficiencia = total > 0 ? (faturamento / total) : 0;
+    document.getElementById("eficiencia").innerText = (eficiencia * 100).toFixed(1) + "%";
 
     gerarGraficos(filtrados);
 }
@@ -192,7 +204,6 @@ function atualizar() {
 let grafico1, grafico2;
 
 function gerarGraficos(dados) {
-
     let mapa = {};
 
     dados.forEach(d => {
@@ -207,7 +218,7 @@ function gerarGraficos(dados) {
     grafico1 = new Chart(document.getElementById("grafico1"), {
         type: "bar",
         data: {
-            labels: labels,
+            labels,
             datasets: [{
                 label: "Faturamento",
                 data: valores
@@ -220,7 +231,7 @@ function gerarGraficos(dados) {
     grafico2 = new Chart(document.getElementById("grafico2"), {
         type: "pie",
         data: {
-            labels: labels,
+            labels,
             datasets: [{
                 data: valores
             }]
@@ -229,6 +240,7 @@ function gerarGraficos(dados) {
 }
 
 carregarDados();
+
 </script>
 
 </body>
