@@ -8,258 +8,172 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
 <style>
-body { font-family: Arial; background:#f0f2f5; margin:0 }
-.container { padding:20px }
-.card { background:#fff; padding:20px; margin-bottom:20px; border-radius:10px }
+:root{
+--green:#299947;
+--gray:#a395a8;
+--bg:#f4f6f8;
+}
+
+body{
+font-family:Arial;
+background:var(--bg);
+margin:0;
+}
+
+header{
+background:#fff;
+padding:15px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+box-shadow:0 2px 5px rgba(0,0,0,.1);
+}
+
+.container{
+padding:20px;
+}
+
+.card{
+background:#fff;
+padding:20px;
+margin-bottom:20px;
+border-radius:10px;
+box-shadow:0 2px 10px rgba(0,0,0,.05);
+}
+
+.btn{
+background:var(--green);
+color:#fff;
+border:none;
+padding:10px 15px;
+border-radius:20px;
+cursor:pointer;
+}
+
+select{
+padding:10px;
+border-radius:20px;
+width:100%;
+}
+
+.stats{
+display:flex;
+gap:20px;
+}
+
+.stat{
+flex:1;
+text-align:center;
+font-size:20px;
+}
+
+canvas{
+max-height:400px;
+}
 </style>
 </head>
 
 <body>
 
+<header>
+<h2>FASICLIN Dashboard</h2>
+<button class="btn" onclick="fetchData()">Atualizar</button>
+</header>
+
 <div class="container">
-<h2>Dashboard FASICLIN</h2>
 
-<select id="procSelect" onchange="filterData()"></select>
+<div class="card">
+<select id="procSelect" onchange="filterData()">
+<option value="TODOS">Todos</option>
+</select>
+</div>
 
-<div>
-<button onclick="setMonth('TODOS')">Todos</button>
-<div id="monthBtns"></div>
+<div class="stats">
+<div class="card stat">Qtd: <span id="qtd">0</span></div>
+<div class="card stat">R$: <span id="valor">0</span></div>
 </div>
 
 <div class="card">
-<h3>Total Atendimentos</h3>
-<p id="totalQtd">0</p>
+<canvas id="chart"></canvas>
 </div>
 
-<div class="card">
-<h3>Faturamento</h3>
-<p id="totalFinan">R$ 0</p>
-</div>
-
-<div class="card">
-<h3>Eficiência</h3>
-<p id="avgMeta">0%</p>
-</div>
-
-<canvas id="chartMeta"></canvas>
-<canvas id="chartProcedimento"></canvas>
-
-<button onclick="exportToPDF()">Exportar PDF</button>
 </div>
 
 <script>
 
-// 🔗 LINK CORRETO DA SUA PLANILHA
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1M2TGuEkzyOXgcxGK9ujYDknIgjvWlveHHsSpqnvv5j4/export?format=csv&gid=1575732509";
+const URL = "https://docs.google.com/spreadsheets/d/1M2TGuEkzyOXgcxGK9ujYDknIgjvWlveHHsSpqnvv5j4/export?format=csv&gid=1575732509";
 
-// 📌 CONFIG COLUNAS
-const COLUNAS = {
-    DATA: 'DATA',
-    PROCEDIMENTO: 'PROCEDIMENTO',
-    VALOR: 'VALOR TOTAL',
-    QUANTIDADE: 'QUANTIDADE',
-    TURMA: 'TURMA',
-    CLINICA: 'CLINICA'
-};
+let dataGlobal = [];
+let chart;
 
-const META_DIARIA = 40;
+async function fetchData(){
+const res = await fetch(URL);
+const text = await res.text();
 
-let rawData = [];
-let filteredData = [];
-let selectedMonth = 'TODOS';
-let myCharts = {};
+const wb = XLSX.read(text,{type:'string'});
+const ws = wb.Sheets[wb.SheetNames[0]];
+dataGlobal = XLSX.utils.sheet_to_json(ws);
 
-// 🚀 FETCH
-async function fetchDataFromSheets() {
-    const res = await fetch(SHEET_CSV_URL);
-    const csv = await res.text();
-
-    const wb = XLSX.read(csv, {type:'string'});
-    const ws = wb.Sheets[wb.SheetNames[0]];
-
-    rawData = XLSX.utils.sheet_to_json(ws);
-
-    console.log("Dados:", rawData);
-    console.log("Colunas:", Object.keys(rawData[0]));
-
-    initDashboard();
+populate();
+update(dataGlobal);
 }
 
-// 🔍 BUSCA VALOR
-function getVal(row, label) {
-    const target = label.toUpperCase().trim();
+function populate(){
+let select = document.getElementById('procSelect');
+let procs = [...new Set(dataGlobal.map(r=>r.PROCEDIMENTO))];
 
-    let key = Object.keys(row).find(k => k.toUpperCase().trim() === target);
-    if (!key) key = Object.keys(row).find(k => k.toUpperCase().includes(target));
+select.innerHTML='<option value="TODOS">Todos</option>';
 
-    return key ? row[key] : "";
+procs.forEach(p=>{
+select.innerHTML += `<option>${p}</option>`;
+});
 }
 
-// 🔢 LIMPA NÚMERO
-function cleanNum(val) {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
+function filterData(){
+let p = document.getElementById('procSelect').value;
 
-    let n = val.toString()
-        .replace('R$', '')
-        .replace(/\./g,'')
-        .replace(',', '.');
+let f = dataGlobal.filter(r=>{
+return p==="TODOS" || r.PROCEDIMENTO===p;
+});
 
-    return parseFloat(n) || 0;
+update(f);
 }
 
-// 📅 DATA
-function parseDate(d) {
-    if (!d) return null;
+function update(data){
 
-    if (d.includes('/')) {
-        const p = d.split('/');
-        return new Date(p[2], p[1]-1, p[0]);
-    }
+let qtd=0;
+let val=0;
+let map={};
 
-    return new Date(d);
+data.forEach(r=>{
+let q = Number(r.QUANTIDADE)||0;
+let v = Number(r["VALOR TOTAL"])||0;
+
+qtd+=q;
+val+=v;
+
+map[r.PROCEDIMENTO]=(map[r.PROCEDIMENTO]||0)+v;
+});
+
+document.getElementById('qtd').innerText=qtd;
+document.getElementById('valor').innerText=val.toFixed(2);
+
+let labels=Object.keys(map);
+let values=Object.values(map);
+
+if(chart) chart.destroy();
+
+chart=new Chart(document.getElementById('chart'),{
+type:'bar',
+data:{labels,datasets:[{data:values}]}
+});
 }
 
-// 🚀 INIT
-function initDashboard() {
-    populateDropdown();
-    populateMonthButtons();
-    updateDashboard(rawData);
-}
-
-// 📋 DROPDOWN
-function populateDropdown() {
-    const select = document.getElementById('procSelect');
-
-    const procs = [...new Set(rawData.map(r =>
-        getVal(r, COLUNAS.PROCEDIMENTO)
-    ))];
-
-    select.innerHTML = '<option value="TODOS">TODOS</option>';
-
-    procs.forEach(p => {
-        select.innerHTML += `<option>${p}</option>`;
-    });
-}
-
-// 📅 MESES
-function populateMonthButtons() {
-    const div = document.getElementById('monthBtns');
-
-    const months = [...new Set(rawData.map(r => {
-        const d = parseDate(getVal(r, COLUNAS.DATA));
-        return d ? d.toLocaleString('pt-BR',{month:'long',year:'numeric'}) : '';
-    }))];
-
-    months.forEach(m => {
-        div.innerHTML += `<button onclick="setMonth('${m}')">${m}</button>`;
-    });
-}
-
-function setMonth(m) {
-    selectedMonth = m;
-    filterData();
-}
-
-// 🔎 FILTRO
-function filterData() {
-    const proc = document.getElementById('procSelect').value;
-
-    filteredData = rawData.filter(r => {
-        const d = parseDate(getVal(r, COLUNAS.DATA));
-        const m = d ? d.toLocaleString('pt-BR',{month:'long',year:'numeric'}) : '';
-
-        return (selectedMonth === 'TODOS' || m === selectedMonth) &&
-               (proc === 'TODOS' || getVal(r, COLUNAS.PROCEDIMENTO) === proc);
-    });
-
-    updateDashboard(filteredData);
-}
-
-// 📊 DASHBOARD
-function updateDashboard(data) {
-    let totalQ = 0;
-    let totalV = 0;
-
-    let procMap = {};
-    let metaMap = {};
-
-    data.forEach(r => {
-        const q = cleanNum(getVal(r, COLUNAS.QUANTIDADE));
-        const v = cleanNum(getVal(r, COLUNAS.VALOR));
-        const proc = getVal(r, COLUNAS.PROCEDIMENTO);
-
-        totalQ += q;
-        totalV += v;
-
-        procMap[proc] = (procMap[proc] || 0) + v;
-
-        const d = parseDate(getVal(r, COLUNAS.DATA));
-        if (d) {
-            const key = d.toLocaleDateString('pt-BR');
-
-            if (!metaMap[key]) metaMap[key] = {r:0,m:META_DIARIA};
-            metaMap[key].r += q;
-        }
-    });
-
-    document.getElementById('totalQtd').innerText = totalQ;
-    document.getElementById('totalFinan').innerText =
-        totalV.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-
-    const dias = Object.keys(metaMap).length;
-    document.getElementById('avgMeta').innerText =
-        dias ? Math.round((totalQ/(dias*META_DIARIA))*100)+'%' : '0%';
-
-    renderCharts(procMap, metaMap);
-}
-
-// 📈 GRÁFICOS
-function renderCharts(procMap, metaMap) {
-
-    Object.values(myCharts).forEach(c => c?.destroy());
-
-    const datas = Object.keys(metaMap);
-
-    myCharts.meta = new Chart(document.getElementById('chartMeta'), {
-        type:'line',
-        data:{
-            labels: datas,
-            datasets:[
-                {label:'Realizado', data: datas.map(d=>metaMap[d].r)},
-                {label:'Meta', data: datas.map(d=>metaMap[d].m)}
-            ]
-        }
-    });
-
-    const labels = Object.keys(procMap);
-
-    myCharts.proc = new Chart(document.getElementById('chartProcedimento'), {
-        type:'bar',
-        data:{
-            labels,
-            datasets:[{label:'Receita', data: Object.values(procMap)}]
-        }
-    });
-}
-
-// 📄 PDF
-function exportToPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    doc.text("Relatório FASICLIN", 10, 10);
-
-    doc.save("relatorio.pdf");
-}
-
-// 🚀 START
-window.onload = fetchDataFromSheets;
+fetchData();
 
 </script>
+
 </body>
 </html>
