@@ -119,63 +119,40 @@
 
 <script>
     // CONFIGURAÇÃO DOS DADOS
-    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14YIz2IkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHCBI1vIuwU_2XOidkNswPkO8tum1kmScpspHc5A/pub?output=csv";
-    let rawData = [];
-    let filteredData = []; 
-    let myCharts = {};
-    let selectedMonth = 'TODOS';
-    const F_GREEN = '#299947';
-    const F_GRAY = '#a395a8';
+  // 1. Use o link exato que o Google te deu (entre aspas)
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14YIz2IkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHCBI1vIuwU_2XOidkNswPkO8tum1kmScpspHc5A/pub?output=csv";
 
-    window.onload = function() {
-        if (typeof ChartDataLabels !== 'undefined') {
-            Chart.register(ChartDataLabels);
-        }
-        fetchDataFromSheets();
-    };
+async function fetchDataFromSheets() {
+    const loading = document.getElementById('loadingOverlay');
+    loading.style.display = 'flex';
+    
+    try {
+        // 2. Chamada direta sem concatenações complexas para evitar o erro 404
+        const response = await fetch(SHEET_CSV_URL);
 
-    function parseDate(d) {
-        if (!d) return null;
-        if (d instanceof Date) return d;
-        if (typeof d === 'string') {
-            let parts = d.split(' ')[0].split('/');
-            if (parts.length === 3) {
-                return new Date(parts[2], parts[1] - 1, parts[0]);
-            }
+        if (!response.ok) throw new Error(`Status: ${response.status}`);
+
+        const csvText = await response.text();
+
+        if (csvText.includes("<!DOCTYPE") || csvText.includes("login")) {
+            throw new Error("A planilha não está 'Publicada na Web' corretamente.");
         }
-        const fallback = new Date(d);
-        return isNaN(fallback) ? null : fallback;
+
+        // 3. Processamento dos dados
+        const workbook = XLSX.read(csvText, {type: 'string'});
+        const sheetName = workbook.SheetNames[0];
+        rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        if (!rawData || rawData.length === 0) throw new Error("A planilha está vazia.");
+
+        initDashboard();
+    } catch (error) {
+        console.error("Erro detalhado:", error);
+        alert(`⚠️ Erro ao conectar: ${error.message}`);
+    } finally {
+        loading.style.display = 'none';
     }
-
-    async function fetchDataFromSheets() {
-        const loading = document.getElementById('loadingOverlay');
-        loading.style.display = 'flex';
-        
-        try {
-            // Adicionamos um timestamp para evitar que o navegador use uma versão antiga (cache)
-            const cacheBuster = `&cache=${new Date().getTime()}`;
-            const response = await fetch(SHEET_CSV_URL + cacheBuster);
-
-            if (!response.ok) throw new Error(`Status: ${response.status}`);
-
-            const csvText = await response.text();
-            if (csvText.includes("<!DOCTYPE") || csvText.includes("login")) {
-                throw new Error("Acesso negado. A planilha não está 'Publicada na Web' como CSV.");
-            }
-            const workbook = XLSX.read(csvText, {type: 'string'});
-            const sheetName = workbook.SheetNames[0];
-            rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-            if (!rawData || rawData.length === 0) throw new Error("A planilha parece estar vazia.");
-
-            initDashboard();
-        } catch (error) {
-            console.error("Erro detalhado:", error);
-            alert(`⚠️ Erro ao conectar: ${error.message}\n\nVerifique:\n1. Arquivo > Compartilhar > Publicar na Web.\n2. Escolha 'Valores separados por vírgula (.csv)'.`);
-        } finally {
-            loading.style.display = 'none';
-        }
-    }
+}
 
     function initDashboard() {
         populateDropdown();
