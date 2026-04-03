@@ -227,14 +227,17 @@ async function fetchDataFromSheets() {
         let pMap = {}, tMap = {}, cMap = {}, mMap = {}, pCountMap = {};
 
         data.forEach(row => {
+            // AJUSTE DE NOMES DE COLUNA (Baseado no seu print)
             const q = cleanNum(getVal(row, 'QUANTIDADE'));
-            const v = cleanNum(getVal(row, 'VALOR')); 
+            const v = cleanNum(getVal(row, 'VALOR TOTAL')); // Antes era apenas 'VALOR'
             const proc = (getVal(row, 'PROCEDIMENTO') || 'OUTROS').toString().trim();
-            const tur = (getVal(row, 'TURMA') || 'N/A').toString().trim();
+            const tur = (getVal(row, 'TURMA') || 'N/A').toString().trim(); // Verifique se essa coluna existe
             const cli = (getVal(row, 'CLINICA') || 'N/A').toString().trim();
             const dt = getVal(row, 'DATA');
 
-            tQtd += q; tFinan += v;
+            tQtd += q; 
+            tFinan += v;
+            
             pMap[proc] = (pMap[proc] || 0) + v;
             pCountMap[proc] = (pCountMap[proc] || 0) + q;
             tMap[tur] = (tMap[tur] || 0) + q;
@@ -248,14 +251,15 @@ async function fetchDataFromSheets() {
             }
         });
 
+        // Atualiza os cards na tela
         document.getElementById('totalQtd').innerText = tQtd.toLocaleString('pt-BR');
         document.getElementById('totalFinan').innerText = tFinan.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        
         const dias = Object.keys(mMap).length;
         document.getElementById('avgMeta').innerText = dias > 0 ? Math.round((tQtd/(dias*40))*100)+"%" : "0%";
 
         renderCharts(pMap, pCountMap, mMap, tMap, cMap);
     }
-
     function renderCharts(pMap, pCountMap, mMap, tMap, cMap) {
         Object.values(myCharts).forEach(c => c.destroy());
 
