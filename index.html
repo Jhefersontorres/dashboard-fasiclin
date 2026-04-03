@@ -1,266 +1,225 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FASICLIN - Gestão Premium</title>
+<meta charset="UTF-8">
+<title>FASICLIN - Dashboard Premium</title>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+body { font-family: Arial; background:#f5f5f5; margin:0; }
+.container { padding:20px; }
 
-    <style>
-        :root {
-            --fasiclin-green: #299947;
-            --fasiclin-gray: #a395a8;
-            --primary-text: #333;
-            --bg-color: #f0f2f5;
-            --card-bg: #fff;
-            --shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-        }
+.card { background:#fff; padding:20px; border-radius:10px; margin-bottom:20px; }
 
-        body {
-            font-family: 'Poppins';
-            background: var(--bg-color);
-            margin: 0;
-        }
+.stats { display:flex; gap:20px; }
+.stat { flex:1; text-align:center; }
+.stat h2 { color:#299947; }
 
-        header {
-            background: #fff;
-            padding: 10px 5%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, .05);
-        }
+select { padding:10px; border-radius:10px; }
 
-        .btn {
-            padding: 8px 15px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: 600;
-            border: none;
-        }
-
-        .btn-export {
-            background: var(--fasiclin-green);
-            color: #fff;
-        }
-
-        .container {
-            padding: 25px 5%;
-            max-width: 1600px;
-            margin: auto;
-        }
-
-        .card {
-            background: #fff;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: var(--shadow);
-            margin-bottom: 20px;
-        }
-
-        .stats {
-            display: flex;
-            gap: 20px;
-        }
-
-        .stat {
-            flex: 1;
-            text-align: center;
-        }
-
-        .stat p {
-            font-size: 30px;
-            color: var(--fasiclin-green);
-        }
-
-        select {
-            padding: 10px;
-            border-radius: 20px;
-            width: 100%;
-        }
-
-        canvas {
-            max-height: 400px;
-        }
-
-        #loadingOverlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #fff;
-            align-items: center;
-            justify-content: center;
-        }
-    </style>
+canvas { max-height:350px; }
+</style>
 </head>
 
 <body>
 
-    <div id="loadingOverlay">Carregando dados...</div>
+<div class="container">
 
-    <header>
-        <h2>FASICLIN Dashboard</h2>
-        <button onclick="exportToPDF()" class="btn btn-export">Exportar PDF</button>
-    </header>
+<div class="card">
+<select id="procSelect" onchange="filterData()"></select>
+<div id="months"></div>
+</div>
 
-    <div class="container">
+<div class="stats">
+<div class="card stat"><p>Total</p><h2 id="qtd">0</h2></div>
+<div class="card stat"><p>Faturamento</p><h2 id="valor">0</h2></div>
+<div class="card stat"><p>Eficiência</p><h2 id="meta">0%</h2></div>
+</div>
 
-        <div class="card">
-            <select id="procSelect" onchange="filterData()">
-                <option value="TODOS">Todos</option>
-            </select>
-        </div>
+<div class="card">
+<canvas id="metaChart"></canvas>
+</div>
 
-        <div class="stats">
-            <div class="card stat">Qtd: <p id="qtd">0</p>
-            </div>
-            <div class="card stat">R$: <p id="valor">0</p>
-            </div>
-            <div class="card stat">%: <p id="meta">0%</p>
-            </div>
-        </div>
+<div class="card">
+<canvas id="procChart"></canvas>
+</div>
 
-        <div class="card">
-            <canvas id="chart"></canvas>
-        </div>
+<div class="card">
+<canvas id="turmaChart"></canvas>
+</div>
 
-    </div>
+<div class="card">
+<canvas id="clinicaChart"></canvas>
+</div>
 
-    <script>
-        let rawData = [];
-        let filteredData = [];
-        let selectedMonth = 'TODOS';
-        let myCharts = {};
+</div>
 
-        // 🔗 GOOGLE SHEETS
-        const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14Ylz2lkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHC8I1vIuwU_2X0idkNswPkO8tum1kmScpspHo5A/pubhtmlhttps://docs.google.com/spreadsheets/d/e/2PACX-1vTV14Ylz2lkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHC8I1vIuwU_2X0idkNswPkO8tum1kmScpspHo5A/pub?output=csv/pub?output=csv";
+<script>
 
-        window.onload = fetchDataFromSheets;;
+// 🔥 COLE AQUI SEU LINK PUBLICADO CSV
+const SHEET_URL = "COLE_AQUI_O_LINK_CSV_PUBLICADO";
 
-        // 🔥 BUSCA DADOS
-        async function fetchDataFromSheets() {
-    const loading = document.getElementById('loadingOverlay');
-    loading.style.display = 'flex';
-    
-    try {
-        const response = await fetch(SHEET_URL);
-        const csvText = await response.text();
+// VARIÁVEIS
+let rawData=[];
+let selectedMonth="TODOS";
+let charts={};
 
-        const workbook = XLSX.read(csvText, { type: 'string' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        
-        rawData = XLSX.utils.sheet_to_json(sheet);
+// 🚀 INIT
+window.onload = fetchData;
 
-        console.log("DADOS:", rawData);
+async function fetchData(){
+try{
+const res = await fetch(SHEET_URL);
+const txt = await res.text();
 
-        if (!rawData.length) {
-            throw new Error("Planilha vazia");
-        }
+const wb = XLSX.read(txt,{type:'string'});
+const ws = wb.Sheets[wb.SheetNames[0]];
+rawData = XLSX.utils.sheet_to_json(ws);
 
-        populate();
-        update(rawData);
+console.log(rawData);
 
-    } catch (error) {
-        console.error(error);
-        alert("Erro ao carregar dados da planilha");
-    }
+populateFilters();
+update(rawData);
 
-    loading.style.display = 'none';
+}catch(e){
+alert("Erro ao carregar planilha");
+console.error(e);
+}
 }
 
-        // 📌 DROPDOWN
-        function populate() {
-            let select = document.getElementById('procSelect');
-            let procs = [...new Set(rawData.map(r => getVal(r, 'PROCEDIMENTO')))].sort();
+// 🎯 FILTROS
+function populateFilters(){
 
-            select.innerHTML = '<option value="TODOS">Todos</option>';
+// PROCEDIMENTO
+let select=document.getElementById('procSelect');
+let procs=[...new Set(rawData.map(r=>getVal(r,'PROCEDIMENTO')))].sort();
 
-            procs.forEach(p => {
-                if (p) select.innerHTML += `<option>${p}</option>`;
-            });
-        }
+select.innerHTML='<option value="TODOS">Todos</option>';
+procs.forEach(p=>select.innerHTML+=`<option>${p}</option>`);
 
-        // 🔍 FILTRO
-        function filterData() {
-            let p = document.getElementById('procSelect').value;
+// MESES
+let div=document.getElementById('months');
+let meses=[...new Set(rawData.map(r=>{
+let d=parseDate(getVal(r,'DATA'));
+return d?d.toLocaleString('pt-BR',{month:'short',year:'numeric'}):null;
+}))].filter(Boolean);
 
-            let f = rawData.filter(r => {
-                return p === "TODOS" || getVal(r, 'PROCEDIMENTO') === p;
-            });
+div.innerHTML='<button onclick="setMonth(\'TODOS\')">Todos</button>';
+meses.forEach(m=>{
+div.innerHTML+=`<button onclick="setMonth('${m}')">${m}</button>`;
+});
+}
 
-            update(f);
-        }
+function setMonth(m){
+selectedMonth=m;
+filterData();
+}
 
-        // 📊 ATUALIZA DASHBOARD
-        function update(data) {
+function filterData(){
+let proc=document.getElementById('procSelect').value;
 
-            let qtd = 0;
-            let val = 0;
-            let map = {};
+let data=rawData.filter(r=>{
+let d=parseDate(getVal(r,'DATA'));
+let m=d?d.toLocaleString('pt-BR',{month:'short',year:'numeric'}):"";
 
-            data.forEach(r => {
-                let q = cleanNum(getVal(r, 'QUANTIDADE'));
-                let v = cleanNum(getVal(r,'VALOR TOTAL') || getVal(r,'VALOR'));
+return (selectedMonth==="TODOS"||m===selectedMonth) &&
+(proc==="TODOS"||getVal(r,'PROCEDIMENTO')===proc);
+});
 
-                qtd += q;
-                val += v;
+update(data);
+}
 
-                let proc = getVal(r, 'PROCEDIMENTO');
-                map[proc] = (map[proc] || 0) + v;
-            });
+// 📊 DASHBOARD
+function update(data){
 
-            document.getElementById('qtd').innerText = qtd;
-            document.getElementById('valor').innerText = val.toLocaleString('pt-BR');
+let qtd=0,val=0;
+let procMap={}, turmaMap={}, clinicaMap={}, metaMap={};
 
-            document.getElementById('meta').innerText = data.length > 0 ? Math.round(qtd / (data.length * 40) * 100) + '%' : '0%';
+data.forEach(r=>{
+let q=clean(getVal(r,'QUANTIDADE'));
+let v=clean(getVal(r,'VALOR TOTAL'));
 
-            let labels = Object.keys(map);
-            let values = Object.values(map);
+let proc=getVal(r,'PROCEDIMENTO');
+let turma=getVal(r,'TURMA');
+let clinica=getVal(r,'CLINICA');
 
-            if (chart) chart.destroy();
+qtd+=q;
+val+=v;
 
-            chart = new Chart(document.getElementById('chart'), {
-                type: 'bar',
-                data: { labels, datasets: [{ data: values, backgroundColor: '#299947' }] }
-            });
-        }
+procMap[proc]=(procMap[proc]||0)+v;
+turmaMap[turma]=(turmaMap[turma]||0)+q;
+clinicaMap[clinica]=(clinicaMap[clinica]||0)+q;
 
-        // 🧠 FUNÇÕES AUXILIARES
-        function getVal(row, label) {
-            const key = Object.keys(row).find(k =>
-                k.toUpperCase().replace(/\s/g, '').includes(label.replace(/\s/g, ''))
-            );
-            return key ? row[key] : "";
-        }
+let d=parseDate(getVal(r,'DATA'));
+if(d){
+let ds=d.toLocaleDateString();
+if(!metaMap[ds]) metaMap[ds]={r:0,m:40};
+metaMap[ds].r+=q;
+}
+});
 
-        function cleanNum(val) {
-            if (!val) return 0;
-            return parseFloat(val.toString().replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
-        }
+// CARDS
+document.getElementById('qtd').innerText=qtd;
+document.getElementById('valor').innerText=val.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+document.getElementById('meta').innerText=data.length?Math.round(qtd/(data.length*40)*100)+'%':'0%';
 
-        // 📄 EXPORT PDF
-        async function exportToPDF() {
-            const { jsPDF } = window.jspdf;
-            const canvas = await html2canvas(document.body);
-            const pdf = new jsPDF();
+// GRÁFICOS
+render(metaMap,procMap,turmaMap,clinicaMap);
+}
 
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0);
-            pdf.save("dashboard.pdf");
-        }
+// 📈 GRÁFICOS
+function render(metaMap,procMap,turmaMap,clinicaMap){
 
-    </script>
+Object.values(charts).forEach(c=>c.destroy());
+
+charts.meta=new Chart(metaChart,{
+type:'line',
+data:{
+labels:Object.keys(metaMap),
+datasets:[
+{label:'Real',data:Object.values(metaMap).map(x=>x.r),borderColor:'green'},
+{label:'Meta',data:Object.values(metaMap).map(x=>x.m),borderColor:'red'}
+]
+}
+});
+
+charts.proc=new Chart(procChart,{
+type:'bar',
+data:{labels:Object.keys(procMap),datasets:[{data:Object.values(procMap),backgroundColor:'green'}]}
+});
+
+charts.turma=new Chart(turmaChart,{
+type:'pie',
+data:{labels:Object.keys(turmaMap),datasets:[{data:Object.values(turmaMap)}]}
+});
+
+charts.clinica=new Chart(clinicaChart,{
+type:'doughnut',
+data:{labels:Object.keys(clinicaMap),datasets:[{data:Object.values(clinicaMap)}]}
+});
+}
+
+// 🧠 HELPERS
+function getVal(r,k){
+let key=Object.keys(r).find(x=>x.toUpperCase().includes(k));
+return key?r[key]:"";
+}
+
+function clean(v){
+if(!v) return 0;
+return parseFloat(v.toString().replace(/[R$\s.]/g,'').replace(',','.'))||0;
+}
+
+function parseDate(d){
+if(!d) return null;
+let p=d.split('/');
+return p.length===3?new Date(p[2],p[1]-1,p[0]):new Date(d);
+}
+
+</script>
 
 </body>
-
 </html>
