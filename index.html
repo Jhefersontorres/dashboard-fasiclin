@@ -120,8 +120,7 @@
 <script>
     // CONFIGURAÇÃO DOS DADOS
   // 1. Use o link exato que o Google te deu (entre aspas)
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14Ylz2lkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHC8I1vIuwU_2X0idkNswPkO8tum1kmScpspHo5A/pub?output=csv";
-
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTV14YIz2IkaCPJEyR7lJHHbVfO7qD4hGwTaqoCxHCBI1vIuwU_2XOidkNswPkO8tum1kmScpspHc5A/pub?output=csv";
 async function fetchDataFromSheets() {
     const loading = document.getElementById('loadingOverlay');
     loading.style.display = 'flex';
@@ -346,6 +345,44 @@ function getVal(row, label) {
 
         doc.save('Relatorio_Fasiclin_Premium.pdf');
     }
+    // Variáveis Globais de Controle
+let rawData = [];
+let filteredData = [];
+let selectedMonth = 'TODOS';
+let myCharts = {};
+const F_GREEN = '#299947';
+const F_GRAY = '#a395a8';
+
+// Inicializa o Dashboard após carregar os dados
+function initDashboard() {
+    populateMonthButtons();
+    populateDropdown();
+    updateDashboard(window.rawData);
+}
+
+// Função para limpar números (remove R$, pontos e converte vírgula em ponto)
+function cleanNum(val) {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    let n = val.toString().replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+    return parseFloat(n) || 0;
+}
+
+// Função para entender datas em formatos diferentes (03/04/2026 ou 2026-04-03)
+function parseDate(dateStr) {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return dateStr;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+// Inicia a busca assim que a página carregar
+window.onload = fetchDataFromSheets;
+    
 </script>
 
 </body>
