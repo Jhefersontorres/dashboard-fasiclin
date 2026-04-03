@@ -127,53 +127,42 @@ async function fetchDataFromSheets() {
     loading.style.display = 'flex';
     
     try {
-        // 2. Chamada direta sem concatenações complexas para evitar o erro 404
         const response = await fetch(SHEET_CSV_URL);
-
         if (!response.ok) throw new Error(`Status: ${response.status}`);
 
         const csvText = await response.text();
-
-        if (csvText.includes("<!DOCTYPE") || csvText.includes("login")) {
-            throw new Error("A planilha não está 'Publicada na Web' corretamente.");
-        }
-
-        // 3. Processamento dos dados
+        
+        // Converte o CSV para JSON
         const workbook = XLSX.read(csvText, {type: 'string'});
-        const sheetName = workbook.SheetNames[0];
-        rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // IMPORTANTE: Definimos rawData na janela global para você conseguir ver no console
+        window.rawData = XLSX.utils.sheet_to_json(worksheet);
 
-        if (!rawData || rawData.length === 0) throw new Error("A planilha está vazia.");
+        console.log("Dados carregados com sucesso:", window.rawData);
+
+        if (!window.rawData || window.rawData.length === 0) {
+            throw new Error("A planilha está vazia ou o formato é inválido.");
+        }
 
         initDashboard();
     } catch (error) {
-        console.error("Erro detalhado:", error);
-        alert(`⚠️ Erro ao conectar: ${error.message}`);
+        console.error("Erro no Fetch:", error);
+        alert(`⚠️ Erro: ${error.message}`);
     } finally {
         loading.style.display = 'none';
     }
 }
 
-    function initDashboard() {
-        populateDropdown();
-        populateMonthButtons();
-        filterData();
-    }
-
-    // --- Mantenha suas funções de auxílio abaixo (getVal, cleanNum, etc) ---
-
-    function getVal(row, label) {
-        const key = Object.keys(row).find(k => k.toUpperCase().trim() === label.toUpperCase().trim());
-        return row[key] || "";
-    }
-
-    function cleanNum(val) {
-        if (!val) return 0;
-        if (typeof val === 'number') return val;
-        // Remove R$, pontos de milhar e troca vírgula por ponto
-        let cleaned = val.toString().replace(/[R$\s.]/g, '').replace(',', '.');
-        return parseFloat(cleaned) || 0;
-    }
+// Função getVal melhorada para não errar por causa de espaços ou acentos
+function getVal(row, label) {
+    if (!row) return "";
+    // Procura a chave que MAIS SE PARECE com o que queremos
+    const target = label.toUpperCase().trim();
+    const key = Object.keys(row).find(k => k.toUpperCase().trim().includes(target));
+    return key ? row[key] : "";
+}
 
     function populateMonthButtons() {
         const container = document.getElementById('monthBtns');
