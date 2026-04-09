@@ -9,6 +9,7 @@ export function renderCharts(m, modoMeta = "diario") {
     const [d2, m2, y2] = b.split("/");
     return new Date(`${y1}-${m1}-${d1}`) - new Date(`${y2}-${m2}-${d2}`);
   });
+  
 
   const isMensal = modoMeta === "mensal";
 

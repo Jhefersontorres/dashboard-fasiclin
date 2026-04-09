@@ -15,6 +15,7 @@ export function parseCSV(text) {
       turma: col[6] || "N/A",
       metaDia: Number(col[7]) || 0
     };
+    
   }).filter(Boolean);
 }
 

@@ -8,6 +8,7 @@ export async function fetchDados() {
   if (cache) {
     const { data, time } = JSON.parse(cache);
     if (Date.now() - time < CONFIG.CACHE_TIME) return data;
+    
   }
 
   const res = await fetch(CONFIG.URL);

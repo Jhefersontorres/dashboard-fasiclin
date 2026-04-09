@@ -51,6 +51,7 @@ export function calcular(dados) {
 
     metricas.porData[d.data] = (metricas.porData[d.data] || 0) + qtd;
     metricas.metaPorData[d.data] = d.metaDia;
+    
   });
 
  // CÁLCULO DA EFICIÊNCIA FINAL
